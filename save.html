@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>Save & Backup · DIV-O Attendance</title>
+  <script id="googleIdentityScript" src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root{--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#68738a;--line:#e3e8f1;--blue:#2563eb;--red:#b4233c;--green:#087443;--shadow:0 10px 28px rgba(28,42,70,.08)}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#f7f9fd,#eef4ff);color:var(--text);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}.app{max-width:800px;margin:auto;padding:28px 18px 42px}header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:10px}h1{font-size:1.55rem;letter-spacing:-.035em;margin:0}p{color:var(--muted)}.nav{display:flex;gap:7px;overflow:auto;margin:0 0 22px}.nav a{color:#506079;text-decoration:none;white-space:nowrap;padding:7px 10px;border-radius:8px;font-size:.8rem;font-weight:750}.nav a:hover,.nav a[aria-current=page]{color:var(--blue);background:#eaf1ff}.drive-link{display:inline-flex;align-items:center;gap:7px;color:#fff;background:var(--blue);text-decoration:none;border-radius:11px;padding:10px 13px;font-size:.82rem;font-weight:750;white-space:nowrap}.card{background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:17px;padding:19px;margin:0 0 16px}.card h2{font-size:1.02rem;margin:0 0 5px}.card p{font-size:.86rem;margin:0 0 15px}.actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.action{min-height:118px;text-align:left;border:1px solid var(--line);border-radius:13px;background:#fff;padding:14px;color:var(--text);font:inherit;cursor:pointer}.action:hover{border-color:#adc6f6;background:#f8fbff}.action strong{display:block;font-size:.9rem;margin:6px 0 3px}.action span{font-size:.76rem;color:var(--muted)}.danger{color:var(--red)}.notice{border-left:4px solid var(--blue);background:#f4f8ff;padding:12px 13px;border-radius:8px;font-size:.8rem;color:#40506a}.status{font-size:.82rem;color:var(--green);min-height:20px}@media(max-width:500px){.app{padding:20px 14px 30px}header{align-items:flex-start;flex-direction:column}.actions{grid-template-columns:1fr}.drive-link{width:100%;justify-content:center}}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div><h1>Save &amp; Backup</h1><p>Keep a portable copy of your attendance.</p></div>
+      <a class="drive-link" href="index.html">☁ Connect Google Drive</a>
+    </header>
+    <nav class="nav" aria-label="Application pages"><a href="index.html">Dashboard</a><a href="insights.html">Insights</a><a href="save.html" aria-current="page">Save &amp; Backup</a></nav>
+
+    <section class="card">
+      <h2>Backup tools</h2><p>Exports remain on your device until you choose where to store or share them.</p>
+      <div class="actions">
+        <button class="action" id="exportBtn"><span>↓</span><strong>Export backup</strong><span>Download all settings and attendance as a JSON file.</span></button>
+        <button class="action" id="importBtn"><span>↑</span><strong>Import backup</strong><span>Restore a previously exported attendance JSON file.</span></button>
+        <input id="importFile" type="file" accept="application/json" hidden>
+        <button class="action danger" id="resetBtn"><span>×</span><strong>Clear local attendance</strong><span>Remove marks from this browser only. Export first if needed.</span></button>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <h2>Google Drive backup</h2>
+      <p>On the Dashboard, use the one Connect Google Drive button in the top corner. Once connected, attendance changes are automatically backed up to the private Google Drive app-data folder.</p>
+      <div class="notice">This app asks only for the restricted <code>drive.appdata</code> permission. It does not request access to your normal Google Drive files or your Gmail profile.</div>
+      <p style="margin-top:14px"><button class="action" id="driveCheckBtn" style="min-height:auto;width:100%"><strong>Run Drive Check</strong><span>Verify the Google library, client configuration, and the exact authorized origin.</span></button></p>
+      <p id="driveCheck" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <h2>Safe restore checklist</h2>
+      <p>Export before importing a different backup. An import replaces the local attendance record, then the Dashboard refreshes the subject totals from the restored data.</p>
+    </section>
+  </main>
+  <script>
+    const STORAGE_KEY = "divOAttendance";
+    const TERM = { start:"2026-07-01", end:"2026-12-11", wef:"2026-07-25" };
+    const status = message => document.getElementById("status").textContent = message;
+    const readState = () => JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"attendance":{},"batch":"O1","target":75}');
+
+    document.getElementById("exportBtn").addEventListener("click", () => {
+      const state = readState();
+      const backup = { app:"DIV-O Attendance", version:2, term:TERM, settings:{batch:state.batch || "O1",target:Number(state.target) || 75}, attendance:state.attendance || {}, holidays:state.holidays || {}, updatedAt:new Date().toISOString() };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)], {type:"application/json"}));
+      const link = document.createElement("a"); link.href=url; link.download="div-o-attendance-backup.json"; link.click(); URL.revokeObjectURL(url);
+      status("Backup downloaded successfully.");
+    });
+    document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
+    document.getElementById("importFile").addEventListener("change", event => {
+      const file = event.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => { try { const data=JSON.parse(reader.result); if (!data || typeof data.attendance !== "object") throw new Error("Invalid backup"); localStorage.setItem(STORAGE_KEY, JSON.stringify({attendance:data.attendance,holidays:data.holidays || {},batch:data.settings?.batch || "O1",target:data.settings?.target || 75})); status("Backup restored. Return to Dashboard to see your attendance."); } catch { status("That file is not a valid DIV-O Attendance backup."); } };
+      reader.readAsText(file); event.target.value="";
+    });
+    document.getElementById("resetBtn").addEventListener("click", () => { if (confirm("Clear all attendance marks stored in this browser?")) { const state=readState(); state.attendance={}; localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); status("Local attendance marks cleared."); } });
+    document.getElementById("driveCheckBtn").addEventListener("click", () => {
+      const oauth=!!(window.google?.accounts?.oauth2), secure=location.protocol==="https:" || location.hostname==="localhost" || location.hostname==="127.0.0.1";
+      document.getElementById("driveCheck").textContent=`Origin: ${location.origin} · HTTPS/localhost: ${secure ? "yes" : "no"} · Google Identity Services: ${oauth ? "ready" : "still loading"} · Client ID: configured. Register this exact origin in Google Cloud.`;
+    });
+  </script>
+</body>
+</html>
