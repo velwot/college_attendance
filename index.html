@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>DIV-O Attendance · Google Drive</title>
+<style>
+:root{
+  --bg:#f4f7fb; --card:#fff; --text:#111827; --muted:#6b7280; --line:#e5e7eb;
+  --primary:#2563eb; --primary2:#1d4ed8; --green:#15803d; --greenbg:#dcfce7;
+  --red:#b91c1c; --redbg:#fee2e2; --amber:#b45309; --amberbg:#fef3c7;
+  --shadow:0 8px 24px rgba(15,23,42,.07); --radius:18px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+button,select,input{font:inherit}
+button{cursor:pointer}
+.app{max-width:1180px;margin:auto;padding:18px}
+header{display:flex;gap:16px;justify-content:space-between;align-items:center;margin-bottom:18px}
+.brand h1{font-size:25px;margin:0 0 4px}.brand p{margin:0;color:var(--muted);font-size:13px}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--card);padding:10px 13px;border-radius:12px;font-weight:650}
+.btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn.danger{color:var(--red)}
+.btn:active{transform:translateY(1px)}
+.controls{background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:var(--radius);padding:15px;display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:18px}
+.control{display:flex;flex-direction:column;gap:6px}.control label{font-size:12px;color:var(--muted);font-weight:700}
+select,input{border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:#fff;color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:16px;padding:16px}
+.stat .num{font-size:25px;font-weight:800}.stat .label{font-size:12px;color:var(--muted);margin-top:3px}
+.card{background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:var(--radius);padding:18px;margin-bottom:18px}
+.card h2{font-size:18px;margin:0 0 4px}.sub{color:var(--muted);font-size:13px;margin-bottom:15px}
+.session-list{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.session{border:1px solid var(--line);border-radius:15px;padding:14px;display:flex;justify-content:space-between;gap:14px;align-items:center}
+.session-main{min-width:0}.time{font-size:12px;color:var(--muted);font-weight:750}.subject{font-size:16px;font-weight:800;margin:3px 0}.meta{font-size:12px;color:var(--muted);line-height:1.45}
+.actions{display:flex;gap:6px;flex-shrink:0}.mark{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;font-size:12px;font-weight:750}
+.mark.present.active{background:var(--greenbg);border-color:#86efac;color:var(--green)}
+.mark.absent.active{background:var(--redbg);border-color:#fca5a5;color:var(--red)}
+.mark.clear{color:var(--muted)}
+.empty{padding:25px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+.tabs{display:flex;gap:8px;margin-bottom:14px;overflow:auto}.tab{border:1px solid var(--line);background:#fff;padding:9px 12px;border-radius:10px;white-space:nowrap;font-weight:700}.tab.active{background:#111827;color:#fff;border-color:#111827}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:11px 8px;border-bottom:1px solid var(--line);text-align:left}th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.progress{height:8px;background:#eef2f7;border-radius:99px;overflow:hidden;min-width:90px}.bar{height:100%;background:var(--primary);border-radius:99px}.pct{font-weight:800}
+.badge{display:inline-block;padding:4px 7px;border-radius:99px;font-size:11px;font-weight:800}.safe{background:var(--greenbg);color:var(--green)}.warn{background:var(--amberbg);color:var(--amber)}.low{background:var(--redbg);color:var(--red)}
+.week{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;overflow:auto}.day{min-width:150px}.day h3{font-size:13px;margin:0 0 8px;padding:9px;border-radius:10px;background:#f1f5f9}.slot{border:1px solid var(--line);border-radius:11px;padding:9px;margin-bottom:7px;background:#fff}.slot .s-time{font-size:10px;color:var(--muted);font-weight:800}.slot .s-name{font-size:12px;font-weight:800;margin-top:3px}.slot .s-meta{font-size:10px;color:var(--muted);margin-top:2px}
+.note{font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);padding:11px;border-radius:11px;margin-top:12px}
+footer{color:var(--muted);font-size:11px;text-align:center;padding:8px 0 20px}
+@media(max-width:800px){.grid{grid-template-columns:repeat(2,1fr)}.session-list{grid-template-columns:1fr}.session{align-items:flex-start;flex-direction:column}.actions{width:100%}.mark{flex:1}.controls{align-items:stretch}.control{flex:1;min-width:150px}}
+@media(max-width:480px){.app{padding:12px}.grid{gap:8px}.stat{padding:12px}.stat .num{font-size:21px}.header-actions .btn{padding:8px 9px}.brand h1{font-size:21px}}
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand">
+    <h1>📚 DIV-O Attendance</h1>
+    <p>Sem 1 · ICT Engineering · ODD 2026</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn primary" id="driveBtn" onclick="connectDrive()">Connect Google Drive</button>
+    <button class="btn" onclick="syncNow()">Sync</button>
+    <button class="btn" onclick="exportData()">Export</button>
+    <button class="btn" onclick="document.getElementById('importFile').click()">Import</button>
+    <input id="importFile" type="file" accept="application/json" hidden onchange="importData(event)">
+    <button class="btn danger" onclick="resetAttendance()">Reset</button>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="control">
+    <label>My practical/tutorial batch</label>
+    <select id="batch" onchange="saveSettings();render()">
+      <option value="O1">O1</option>
+      <option value="O2">O2</option>
+      <option value="O3">O3</option>
+      <option value="ALL">All batches</option>
+    </select>
+  </div>
+  <div class="control">
+    <label>Attendance target</label>
+    <select id="target" onchange="saveSettings();render()">
+      <option value="75">75%</option><option value="80">80%</option><option value="85">85%</option>
+    </select>
+  </div>
+  <div class="control">
+    <label>Selected date</label>
+    <input id="datePicker" type="date" min="2026-07-25" max="" onchange="render()">
+  </div>
+</div>
+
+<div id="driveStatus" class="note" style="margin-bottom:18px">☁️ Google Drive: not connected. Attendance still works locally.</div>
+<div id="stats" class="grid"></div>
+
+<section class="card">
+  <h2 id="todayTitle">Today's classes</h2>
+  <div class="sub">Each class occurrence is separate — including the two Tuesday BEE sessions.</div>
+  <div id="todaySessions" class="session-list"></div>
+</section>
+
+<section class="card">
+  <h2>Subject attendance</h2>
+  <div class="sub">Percentage = Present ÷ (Present + Absent). Future classes and unmarked past classes are not included.</div>
+  <div style="overflow:auto"><table><thead><tr><th>Subject</th><th>Recorded</th><th>Present</th><th>Attendance</th><th>Status</th></tr></thead><tbody id="subjectBody"></tbody></table></div>
+</section>
+
+<section class="card">
+  <h2>Weekly timetable</h2>
+  <div class="sub">Batch-specific practicals/tutorials are filtered using the batch selector above. DFW in the timetable is treated as a BEE faculty initial, not a separate subject.</div>
+  <div id="week" class="week"></div>
+  <div class="note">💡 Tuesday has <b>two separate BEE attendance events</b> (1:00–2:00 and 2:00–3:00). Marking one does not mark the other.</div>
+</section>
+
+<section class="card">
+  <h2>Recent attendance</h2>
+  <div class="sub">Latest marked classes.</div>
+  <div style="overflow:auto"><table><thead><tr><th>Date</th><th>Time</th><th>Subject</th><th>Batch</th><th>Status</th></tr></thead><tbody id="historyBody"></tbody></table></div>
+</section>
+
+<footer>LocalStorage is the offline cache. When Google Drive is connected, attendance is also backed up to your Google Drive app-data storage.</footer>
+</div>
+
+<script>
+const TERM_START = "2026-07-01";
+const TERM_END = "2026-12-11";
+const WEF = "2026-07-25";
+
+const timetable = [
+  // Monday intentionally has no classes in the supplied timetable.
+  {day:"Tuesday", time:"10:30–11:30", start:"10:30", end:"11:30", subject:"BME", type:"TH", room:"G-203", faculty:"DUP"},
+  {day:"Tuesday", time:"11:30–12:30", start:"11:30", end:"12:30", subject:"MATHS-I", type:"TH", room:"G-203", faculty:"KTS"},
+  {day:"Tuesday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"BEE", type:"TH", room:"G-203", faculty:"GPP", slot:"BEE-TUE-1"},
+  {day:"Tuesday", time:"14:00–15:00", start:"14:00", end:"15:00", subject:"BEE", type:"TH", room:"G-203", faculty:"DJV", slot:"BEE-TUE-2"},
+  {day:"Tuesday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BEE", type:"LAB", room:"O1-L-204B", faculty:"AYS", batch:"O1", slot:"TUE-LAB-O1-BEE"},
+  {day:"Tuesday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BEE", type:"LAB", room:"O2-", faculty:"", batch:"O2", slot:"TUE-LAB-O2-DFW"},
+
+  {day:"Wednesday", time:"10:30–11:30", start:"10:30", end:"11:30", subject:"MATHS-I", type:"TUT", room:"G-203", faculty:"AAP", batch:"O1", slot:"WED-TUT-O1"},
+  {day:"Wednesday", time:"10:30–11:30", start:"10:30", end:"11:30", subject:"MATHS-I", type:"TUT", room:"G-203", faculty:"VF2", batch:"O2", slot:"WED-TUT-O2"},
+  {day:"Wednesday", time:"10:30–11:30", start:"10:30", end:"11:30", subject:"MATHS-I", type:"TUT", room:"G-203", faculty:"VF3", batch:"O3", slot:"WED-TUT-O3"},
+
+  {day:"Wednesday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"BEE", type:"LAB", room:"G-204A", faculty:"VF", batch:"O1", slot:"WED-LAB-O1-DFW"},
+  {day:"Wednesday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DT", type:"LAB", room:"G-204A", faculty:"VF", batch:"O2", slot:"WED-LAB-O2-DT"},
+  {day:"Wednesday", time:"14:00–15:00", start:"14:00", end:"15:00", subject:"DT", type:"LAB", room:"G-204B", faculty:"ZBM", batch:"O3", slot:"WED-LAB-O3-DT"},
+  {day:"Wednesday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BME", type:"LAB", room:"M-204", faculty:"JBD", batch:"O1", slot:"WED-LAB-O1-BME"},
+  {day:"Wednesday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BEE", type:"LAB", room:"B101A", faculty:"ATM", batch:"O2", slot:"WED-LAB-O2-BEE"},
+  {day:"Wednesday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BME", type:"LAB", room:"M-204", faculty:"F1", batch:"O3", slot:"WED-LAB-O3-BME"},
+
+  {day:"Thursday", time:"10:30–11:30", start:"10:30", end:"11:30", subject:"BME", type:"TH", room:"G-203", faculty:"PAP"},
+  {day:"Thursday", time:"11:30–12:30", start:"11:30", end:"12:30", subject:"IPDC", type:"TH", room:"G-203", faculty:"KNP"},
+  {day:"Thursday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DT", type:"LAB", room:"G-204A", faculty:"ARA", batch:"O1", slot:"THU-LAB-O1-DT"},
+  {day:"Thursday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"BME", type:"LAB", room:"M-204", faculty:"KTD", batch:"O2", slot:"THU-LAB-O2-BME"},
+  {day:"Thursday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DT", type:"LAB", room:"G-204B", faculty:"VF", batch:"O3", slot:"THU-LAB-O3-DT"},
+  {day:"Thursday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"MATHS-I", type:"TH", room:"G-203", faculty:"AAP"},
+  {day:"Thursday", time:"16:15–17:15", start:"16:15", end:"17:15", subject:"IPDC", type:"TH", room:"G-203", faculty:"AUC"},
+
+  {day:"Friday", time:"10:30–11:30", start:"10:30", end:"11:30", subject:"BEE", type:"TH", room:"G-203", faculty:"NBP"},
+  {day:"Friday", time:"11:30–12:30", start:"11:30", end:"12:30", subject:"BME", type:"TH", room:"G-203", faculty:"JBD"},
+  {day:"Friday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DT", type:"LAB", room:"G-204A", faculty:"SDJ", batch:"O1", slot:"FRI-LAB-O1-DT"},
+  {day:"Friday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DT", type:"LAB", room:"G-204B", faculty:"NTG", batch:"O2", slot:"FRI-LAB-O2-DT"},
+  {day:"Friday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"BEE", type:"LAB", room:"O3-", faculty:"", batch:"O3", slot:"FRI-LAB-O3-DFW"},
+  {day:"Friday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BEE", type:"LAB", room:"L204A", faculty:"PJP", batch:"O3", slot:"FRI-LAB-O3-BEE"}
+];
+
+const subjects = ["MATHS-I","BEE","DT","BME","IPDC","DFW"];
+
+let state = JSON.parse(localStorage.getItem("divOAttendance") || '{"attendance":{},"batch":"O1","target":75}');
+document.getElementById("batch").value = state.batch || "O1";
+document.getElementById("target").value = state.target || 75;
+
+const today = new Date();
+const isoToday = new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const datePicker=document.getElementById("datePicker");
+datePicker.max = isoToday < TERM_END ? isoToday : TERM_END;
+datePicker.value = (isoToday >= WEF && isoToday <= TERM_END) ? isoToday : WEF;
+
+function saveSettings(){
+  state.batch=document.getElementById("batch").value;
+  state.target=Number(document.getElementById("target").value);
+  localStorage.setItem("divOAttendance",JSON.stringify(state));
+}
+
+function dateToDay(iso){
+  return new Date(iso+"T12:00:00").toLocaleDateString("en-US",{weekday:"long"});
+}
+function visible(item){
+  return !item.batch || item.batch === state.batch || state.batch==="ALL";
+}
+function classItems(day){
+  return timetable.filter(x=>x.day===day && visible(x));
+}
+function occurrenceId(date,item){
+  // Important: time + slot + subject makes duplicate same-subject classes independent.
+  return [date,item.day,item.start,item.end,item.subject,item.type,item.batch||"ALL",item.slot||""].join("|");
+}
+function getStatus(date,item){
+  return state.attendance[occurrenceId(date,item)] || "";
+}
+function setStatus(date,item,status){
+  const id=occurrenceId(date,item);
+  if(status) state.attendance[id]=status; else delete state.attendance[id];
+  localStorage.setItem("divOAttendance",JSON.stringify(state));
+  
+/* ---------------- Google Drive sync ----------------
+   1. Create a Google OAuth Web application client ID.
+   2. Paste it into GOOGLE_CLIENT_ID below.
+   3. Enable the Google Drive API in the same Google Cloud project.
+   4. Add your deployed origin as an Authorized JavaScript origin.
+   This app requests only drive.appdata, which is Google's app-specific
+   hidden storage area for application data.
+------------------------------------------------------ */
+const GOOGLE_CLIENT_ID = "PASTE_YOUR_GOOGLE_OAUTH_CLIENT_ID_HERE.apps.googleusercontent.com";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+const DRIVE_FILE_NAME = "div-o-attendance.json";
+let tokenClient = null;
+let accessToken = null;
+let driveFileId = null;
+let driveReady = false;
+
+function setDriveStatus(message, ok=false){
+  const el=document.getElementById("driveStatus");
+  if(!el) return;
+  el.innerHTML = (ok ? "🟢 " : "☁️ ") + "Google Drive: " + message;
+}
+
+function driveConfigured(){
+  return GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith("PASTE_");
+}
+
+function connectDrive(){
+  if(!driveConfigured()){
+    alert("First put your Google OAuth Web Client ID into GOOGLE_CLIENT_ID in index.html.");
+    return;
+  }
+  if(!window.google || !google.accounts || !google.accounts.oauth2){
+    alert("Google authorization library is still loading. Try again in a moment.");
+    return;
+  }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: async (response) => {
+      if(response.error){
+        console.error(response);
+        setDriveStatus("authorization failed.");
+        return;
+      }
+      accessToken = response.access_token;
+      driveReady = true;
+      setDriveStatus("connected. Loading your attendance…", true);
+      await loadFromDrive();
+    }
+  });
+  tokenClient.requestAccessToken({prompt:"consent"});
+}
+
+async function ensureDriveToken(){
+  if(accessToken) return true;
+  if(!tokenClient) return false;
+  tokenClient.requestAccessToken({prompt:""});
+  return false;
+}
+
+async function driveFetch(url, options={}){
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", "Bearer " + accessToken);
+  return fetch(url, {...options, headers});
+}
+
+async function findDriveFile(){
+  const q = encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
+  const url = `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,name,modifiedTime)&pageSize=10`;
+  const r = await driveFetch(url);
+  if(r.status===401){ accessToken=null; driveReady=false; setDriveStatus("authorization expired. Click Connect Google Drive again."); return null; }
+  if(!r.ok) throw new Error(await r.text());
+  const data = await r.json();
+  return data.files?.[0] || null;
+}
+
+function makeMultipartBody(metadata, content){
+  const boundary = "-------DIVOAttendanceBoundary" + Math.random().toString(16).slice(2);
+  const body =
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify(metadata) + `\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: application/json\r\n\r\n` +
+    JSON.stringify(content) + `\r\n` +
+    `--${boundary}--`;
+  return {body, boundary};
+}
+
+async function createDriveFile(payload){
+  const {body,boundary}=makeMultipartBody({
+    name:DRIVE_FILE_NAME,
+    parents:["appDataFolder"],
+    mimeType:"application/json"
+  }, payload);
+
+  const r=await driveFetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
+    {method:"POST",headers:{"Content-Type":`multipart/related; boundary=${boundary}`},body}
+  );
+  if(r.status===401){accessToken=null;driveReady=false;throw new Error("Google authorization expired.");}
+  if(!r.ok) throw new Error(await r.text());
+  return (await r.json()).id;
+}
+
+async function updateDriveFile(fileId,payload){
+  const r=await driveFetch(
+    `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media`,
+    {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}
+  );
+  if(r.status===401){accessToken=null;driveReady=false;throw new Error("Google authorization expired.");}
+  if(!r.ok) throw new Error(await r.text());
+}
+
+async function loadDriveFile(fileId){
+  const r=await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`);
+  if(r.status===401){accessToken=null;driveReady=false;throw new Error("Google authorization expired.");}
+  if(!r.ok) throw new Error(await r.text());
+  return await r.json();
+}
+
+function cloudPayload(){
+  return {
+    app:"DIV-O Attendance",
+    version:2,
+    term:{start:TERM_START,end:TERM_END,wef:WEF},
+    settings:{batch:state.batch,target:state.target},
+    attendance:state.attendance,
+    updatedAt:new Date().toISOString()
+  };
+}
+
+async function loadFromDrive(){
+  if(!accessToken) return;
+  try{
+    const file=await findDriveFile();
+    if(!file){
+      driveFileId=await createDriveFile(cloudPayload());
+      setDriveStatus("connected. New attendance backup created.",true);
+      return;
+    }
+    driveFileId=file.id;
+    const remote=await loadDriveFile(driveFileId);
+    if(remote && remote.attendance){
+      state.attendance=remote.attendance;
+      if(remote.settings){
+        state.batch=remote.settings.batch || state.batch;
+        state.target=remote.settings.target || state.target;
+      }
+      localStorage.setItem("divOAttendance",JSON.stringify(state));
+      document.getElementById("batch").value=state.batch;
+      document.getElementById("target").value=state.target;
+      render();
+      setDriveStatus("connected. Attendance restored from Drive.",true);
+    }
+  }catch(err){
+    console.error(err);
+    setDriveStatus("sync error: " + err.message);
+  }
+}
+
+async function syncNow(){
+  if(!driveReady || !accessToken){
+    connectDrive();
+    return;
+  }
+  try{
+    if(!driveFileId){
+      const file=await findDriveFile();
+      driveFileId=file?.id || null;
+    }
+    if(driveFileId) await updateDriveFile(driveFileId,cloudPayload());
+    else driveFileId=await createDriveFile(cloudPayload());
+    setDriveStatus("saved just now.",true);
+  }catch(err){
+    console.error(err);
+    setDriveStatus("save failed: " + err.message);
+  }
+}
+
+render();
+}
+
+function effectiveToday(){
+  const now=new Date();
+  return new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+function cutoffDate(){
+  const selected=document.getElementById("datePicker").value || effectiveToday();
+  return selected > effectiveToday() ? effectiveToday() : selected;
+}
+function termDates(){
+  const arr=[];
+  const start = new Date(WEF+"T12:00:00");
+  const end = new Date(cutoffDate()+"T12:00:00");
+  if(end < start) return arr;
+  let d=start;
+  while(d<=end){arr.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1)}
+  return arr;
+}
+function allOccurrences(){
+  const out=[];
+  for(const d of termDates()){
+    const day=dateToDay(d);
+    for(const item of classItems(day)) out.push({date:d,item,status:getStatus(d,item)});
+  }
+  return out;
+}
+function subjectStats(){
+  const stats={}; subjects.forEach(s=>stats[s]={total:0,present:0,marked:0,unmarked:0});
+  for(const o of allOccurrences()){
+    const s=o.item.subject;
+    if(!stats[s]) stats[s]={total:0,present:0,marked:0,unmarked:0};
+    stats[s].total++;
+    if(o.status){
+      stats[s].marked++;
+      if(o.status==="present") stats[s].present++;
+    } else {
+      stats[s].unmarked++;
+    }
+  }
+  return stats;
+}
+function statusBadge(pct,total){
+  if(!total) return '<span class="badge">No classes</span>';
+  const t=Number(state.target);
+  if(pct>=t) return '<span class="badge safe">Safe</span>';
+  if(pct>=Math.max(0,t-10)) return '<span class="badge warn">Watch</span>';
+  return '<span class="badge low">Low</span>';
+}
+function renderStats(){
+  const stats=subjectStats(); let present=0,marked=0,unmarked=0;
+  Object.values(stats).forEach(x=>{present+=x.present;marked+=x.marked;unmarked+=x.unmarked});
+  const pct=marked?present/marked*100:0;
+  const safe=Object.values(stats).filter(x=>x.marked && x.present/x.marked*100>=state.target).length;
+  const low=Object.values(stats).filter(x=>x.marked && x.present/x.marked*100<state.target).length;
+  document.getElementById("stats").innerHTML=[
+    ["Recorded attendance",marked?(pct.toFixed(1)+"%"):"—","Present ÷ (Present + Absent)"],
+    ["Present",present,"Classes attended"],
+    ["Recorded",marked,"Present + Absent"],
+    ["Unmarked past",unmarked,"Classes still needing a mark"]
+  ].map(x=>`<div class="stat"><div class="num">${x[1]}</div><div class="label">${x[0]} · ${x[2]}</div></div>`).join("");
+}
+function sessionCard(date,item){
+  const st=getStatus(date,item);
+  const meta=[item.type,item.room,item.faculty].filter(Boolean).join(" · ")+(item.batch?` · Batch ${item.batch}`:"");
+  return `<div class="session">
+    <div class="session-main"><div class="time">${item.time}</div><div class="subject">${item.subject}</div><div class="meta">${meta}</div></div>
+    <div class="actions">
+      <button class="mark present ${st==="present"?"active":""}" onclick='setStatus("${date}",${JSON.stringify(item)},"present")'>✓ Present</button>
+      <button class="mark absent ${st==="absent"?"active":""}" onclick='setStatus("${date}",${JSON.stringify(item)},"absent")'>✕ Absent</button>
+      <button class="mark clear" onclick='setStatus("${date}",${JSON.stringify(item)},"")'>Clear</button>
+    </div>
+  </div>`;
+}
+function renderToday(){
+  const date=document.getElementById("datePicker").value;
+  const day=dateToDay(date);
+  document.getElementById("todayTitle").textContent=`${day} · ${new Date(date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}`;
+  const items=classItems(day);
+  document.getElementById("todaySessions").innerHTML=items.length?items.map(x=>sessionCard(date,x)).join(""):`<div class="empty">No classes scheduled for ${day} in the supplied timetable.</div>`;
+}
+function renderSubjects(){
+  const stats=subjectStats();
+  document.getElementById("subjectBody").innerHTML=subjects.map(s=>{
+    const x=stats[s]||{total:0,present:0,marked:0,unmarked:0}; const pct=x.marked?x.present/x.marked*100:0;
+    return `<tr><td><b>${s}</b></td><td>${x.marked}</td><td>${x.present}</td><td><div style="display:flex;align-items:center;gap:9px"><div class="progress"><div class="bar" style="width:${Math.min(100,pct)}%"></div></div><span class="pct">${x.marked?pct.toFixed(1)+"%":"—"}</span></div></td><td>${statusBadge(pct,x.marked)}${x.unmarked?` <span style="font-size:11px;color:var(--muted)">· ${x.unmarked} unmarked</span>`:""}</td></tr>`;
+  }).join("");
+}
+function renderWeek(){
+  const days=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  document.getElementById("week").innerHTML=days.map(day=>{
+    const items=classItems(day);
+    return `<div class="day"><h3>${day}</h3>${items.length?items.map(x=>`<div class="slot"><div class="s-time">${x.time}</div><div class="s-name">${x.subject}</div><div class="s-meta">${x.type}${x.batch?" · "+x.batch:""}${x.room?" · "+x.room:""}</div></div>`).join(""):`<div class="empty" style="padding:15px;font-size:11px">No class</div>`}</div>`;
+  }).join("");
+}
+function renderHistory(){
+  const rows=allOccurrences().filter(x=>x.status).sort((a,b)=>b.date.localeCompare(a.date)||b.item.start.localeCompare(a.item.start)).slice(0,40);
+  document.getElementById("historyBody").innerHTML=rows.length?rows.map(x=>`<tr><td>${new Date(x.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</td><td>${x.item.time}</td><td><b>${x.item.subject}</b></td><td>${x.item.batch||"—"}</td><td><span class="badge ${x.status==="present"?"safe":"low"}">${x.status}</span></td></tr>`).join(""):`<tr><td colspan="5" style="text-align:center;color:var(--muted)">No attendance marked yet.</td></tr>`;
+}
+function render(){saveSettings();renderStats();renderToday();renderSubjects();renderWeek();renderHistory();}
+function exportData(){
+  const payload={app:"DIV-O Attendance",version:1,term:{start:TERM_START,end:TERM_END,wef:WEF},settings:{batch:state.batch,target:state.target},attendance:state.attendance};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="div-o-attendance-backup.json";a.click();URL.revokeObjectURL(a.href);
+}
+function importData(e){
+  const file=e.target.files[0]; if(!file)return;
+  const r=new FileReader(); r.onload=()=>{
+    try{
+      const p=JSON.parse(r.result);
+      if(!p.attendance) throw new Error("Invalid backup");
+      state.attendance=p.attendance; if(p.settings){state.batch=p.settings.batch||state.batch;state.target=p.settings.target||state.target}
+      localStorage.setItem("divOAttendance",JSON.stringify(state));
+      document.getElementById("batch").value=state.batch;document.getElementById("target").value=state.target;render();alert("Attendance backup imported.");
+    }catch(err){alert("Could not import this file.");}
+  };r.readAsText(file);e.target.value="";
+}
+function resetAttendance(){
+  if(confirm("Delete all recorded attendance from this browser? This cannot be undone unless you have an export backup.")){
+    state.attendance={};localStorage.setItem("divOAttendance",JSON.stringify(state));render();
+  }
+}
+render();
+</script>
+</body>
+</html>
