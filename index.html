@@ -35,9 +35,12 @@ header { display:flex; gap:22px; justify-content:space-between; align-items:cent
 <body>
 <div class="app">
 <header>
-  <div class="brand">
-    <h1>📚 DIV-O Attendance</h1>
-    <p>Sem 1 · ICT Engineering · ODD 2026</p>
+  <div class="brand" style="display:flex;align-items:center;gap:12px">
+    <img id="vgecLogo" src="logo.png" alt="VGEC logo" onerror="this.style.display='none'" style="width:48px;height:48px;border-radius:8px;background:#fff;padding:4px">
+    <div>
+      <h1>VGEC (ICT) · DIV-O Attendance</h1>
+      <p>Sem 1 · ICT Engineering · ODD 2026</p>
+    </div>
   </div>
   <div class="header-actions">
     <button class="btn primary" id="driveBtn" onclick="connectDrive()">Connect Google Drive</button>
@@ -90,7 +93,7 @@ header { display:flex; gap:22px; justify-content:space-between; align-items:cent
 
 <section class="card">
   <h2>Weekly timetable</h2>
-  <div class="sub">Batch-specific practicals/tutorials are filtered using the batch selector above. DFW in the timetable is treated as a BEE faculty initial, not a separate subject.</div>
+  <div class="sub">Batch-specific practicals/tutorials are filtered using the batch selector above. DFW is treated as a separate subject and is reported independently.</div>
   <div id="week" class="week"></div>
   <div class="note">💡 Tuesday has <b>two separate BEE attendance events</b> (1:00–2:00 and 2:00–3:00). Marking one does not mark the other.</div>
 </section>
@@ -99,6 +102,16 @@ header { display:flex; gap:22px; justify-content:space-between; align-items:cent
   <h2>Recent attendance</h2>
   <div class="sub">Latest marked classes.</div>
   <div style="overflow:auto"><table><thead><tr><th>Date</th><th>Time</th><th>Subject</th><th>Batch</th><th>Status</th></tr></thead><tbody id="historyBody"></tbody></table></div>
+</section>
+
+<section class="card" id="bunkCard">
+  <h2>Bunk Calculator</h2>
+  <div class="sub">Shows how many upcoming classes you can skip and still meet your attendance target.</div>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px">
+    <label style="font-size:12px;color:var(--muted);font-weight:700">Subject</label>
+    <select id="bunkSubject" onchange="renderBunk()"></select>
+    <div id="bunkBody" style="flex:1"></div>
+  </div>
 </section>
 
 <footer>LocalStorage is the offline cache. When Google Drive is connected, attendance is also backed up to your Google Drive app-data storage.</footer>
@@ -116,13 +129,13 @@ const timetable = [
   {day:"Tuesday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"BEE", type:"TH", room:"G-203", faculty:"GPP", slot:"BEE-TUE-1"},
   {day:"Tuesday", time:"14:00–15:00", start:"14:00", end:"15:00", subject:"BEE", type:"TH", room:"G-203", faculty:"DJV", slot:"BEE-TUE-2"},
   {day:"Tuesday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BEE", type:"LAB", room:"O1-L-204B", faculty:"AYS", batch:"O1", slot:"TUE-LAB-O1-BEE"},
-  {day:"Tuesday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BEE", type:"LAB", room:"O2-", faculty:"", batch:"O2", slot:"TUE-LAB-O2-DFW"},
+  {day:"Tuesday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"DFW", type:"LAB", room:"O2-", faculty:"", batch:"O2", slot:"TUE-LAB-O2-DFW"},
 
   {day:"Wednesday", time:"10:30–11:30", start:"10:30", end:"11:30", subject:"MATHS-I", type:"TUT", room:"G-203", faculty:"AAP", batch:"O1", slot:"WED-TUT-O1"},
   {day:"Wednesday", time:"10:30–11:30", start:"10:30", end:"11:30", subject:"MATHS-I", type:"TUT", room:"G-203", faculty:"VF2", batch:"O2", slot:"WED-TUT-O2"},
   {day:"Wednesday", time:"10:30–11:30", start:"10:30", end:"11:30", subject:"MATHS-I", type:"TUT", room:"G-203", faculty:"VF3", batch:"O3", slot:"WED-TUT-O3"},
 
-  {day:"Wednesday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"BEE", type:"LAB", room:"G-204A", faculty:"VF", batch:"O1", slot:"WED-LAB-O1-DFW"},
+  {day:"Wednesday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DFW", type:"LAB", room:"G-204A", faculty:"VF", batch:"O1", slot:"WED-LAB-O1-DFW"},
   {day:"Wednesday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DT", type:"LAB", room:"G-204A", faculty:"VF", batch:"O2", slot:"WED-LAB-O2-DT"},
   {day:"Wednesday", time:"14:00–15:00", start:"14:00", end:"15:00", subject:"DT", type:"LAB", room:"G-204B", faculty:"ZBM", batch:"O3", slot:"WED-LAB-O3-DT"},
   {day:"Wednesday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BME", type:"LAB", room:"M-204", faculty:"JBD", batch:"O1", slot:"WED-LAB-O1-BME"},
@@ -141,7 +154,7 @@ const timetable = [
   {day:"Friday", time:"11:30–12:30", start:"11:30", end:"12:30", subject:"BME", type:"TH", room:"G-203", faculty:"JBD"},
   {day:"Friday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DT", type:"LAB", room:"G-204A", faculty:"SDJ", batch:"O1", slot:"FRI-LAB-O1-DT"},
   {day:"Friday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DT", type:"LAB", room:"G-204B", faculty:"NTG", batch:"O2", slot:"FRI-LAB-O2-DT"},
-  {day:"Friday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"BEE", type:"LAB", room:"O3-", faculty:"", batch:"O3", slot:"FRI-LAB-O3-DFW"},
+  {day:"Friday", time:"13:00–14:00", start:"13:00", end:"14:00", subject:"DFW", type:"LAB", room:"O3-", faculty:"", batch:"O3", slot:"FRI-LAB-O3-DFW"},
   {day:"Friday", time:"15:15–16:15", start:"15:15", end:"16:15", subject:"BEE", type:"LAB", room:"L204A", faculty:"PJP", batch:"O3", slot:"FRI-LAB-O3-BEE"}
 ];
 
@@ -500,6 +513,7 @@ window.driveDiagnostics = driveDiagnostics;
 window.setStatus = setStatus;
 window.toggleHoliday = toggleHoliday;
 window.runSelfTest = runSelfTest;
+window.renderBunk = renderBunk;
 
 function effectiveToday(){
   const now=new Date();
@@ -604,7 +618,36 @@ function renderHistory(){
   const rows=allOccurrences().filter(x=>x.status).sort((a,b)=>b.date.localeCompare(a.date)||b.item.start.localeCompare(a.item.start)).slice(0,40);
   document.getElementById("historyBody").innerHTML=rows.length?rows.map(x=>`<tr><td>${new Date(x.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</td><td>${x.item.time}</td><td><b>${x.item.subject}</b></td><td>${x.item.batch||"—"}</td><td><span class="badge ${x.status==="present"?"safe":"low"}">${x.status}</span></td></tr>`).join(""):`<tr><td colspan="5" style="text-align:center;color:var(--muted)">No attendance marked yet.</td></tr>`;
 }
-function render(){saveSettings();renderStats();renderToday();renderSubjects();renderWeek();renderHistory();}
+function render(){saveSettings();renderStats();renderToday();renderSubjects();renderWeek();renderHistory();renderBunk();}
+function availableBunksFor(present, marked, target){
+  if(!marked) return null;
+  const t = Number(target)/100;
+  if(t<=0) return 0;
+  const x = Math.floor(present / t - marked);
+  return x >= 0 ? x : 0;
+}
+function renderBunk(){
+  const select = document.getElementById('bunkSubject');
+  if(!select) return;
+  if(!select.dataset.populated){
+    select.innerHTML = ['<option value="ALL">All subjects</option>'].concat(subjects.map(s=>`<option value="${s}">${s}</option>`)).join('');
+    select.dataset.populated = '1';
+  }
+  const chosen = select.value || 'ALL';
+  const stats = subjectStats();
+  const target = state.target || 75;
+  const body = document.getElementById('bunkBody');
+  if(chosen === 'ALL'){
+    let present=0,marked=0,unmarked=0;
+    Object.values(stats).forEach(x=>{present+=x.present;marked+=x.marked;unmarked+=x.unmarked});
+    const avail = availableBunksFor(present,marked,target);
+    body.innerHTML = `<div style="font-size:15px"><b>Overall available bunks:</b> ${marked?avail:'—'}</div><div class="note" style="margin-top:8px">Recorded: ${marked} · Present: ${present} · Unmarked past: ${unmarked}</div>`;
+  } else {
+    const s = stats[chosen]||{present:0,marked:0,unmarked:0};
+    const avail = availableBunksFor(s.present,s.marked,target);
+    body.innerHTML = `<div style="font-size:15px"><b>${chosen} available bunks:</b> ${s.marked?avail:'—'}</div><div class="note" style="margin-top:8px">Recorded: ${s.marked} · Present: ${s.present} · Unmarked past: ${s.unmarked}</div>`;
+  }
+}
 function exportData(){
   const payload={app:"DIV-O Attendance",version:2,term:{start:TERM_START,end:TERM_END,wef:WEF},settings:{batch:state.batch,target:state.target},attendance:state.attendance,holidays:state.holidays || {}};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
