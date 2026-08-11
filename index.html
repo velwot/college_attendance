@@ -43,6 +43,7 @@ header { display:flex; gap:22px; justify-content:space-between; align-items:cent
     </div>
   </div>
   <div class="header-actions">
+    <button class="btn" id="saveUploadBtn" onclick="saveLatestData()">Save / Upload</button>
     <button class="btn primary" id="driveBtn" onclick="connectDrive()">Connect Google Drive</button>
     <div id="driveAccount" class="drive-account" title="Google Drive connected — account details are not requested">
       <span class="drive-avatar" aria-hidden="true">G</span><span>Drive connected</span>
@@ -235,6 +236,8 @@ let driveFileId = null;
 let driveReady = false;
 let gisLoadError = false;
 let driveSaveTimer = null;
+let pendingDriveUpload = false;
+const DRIVE_SESSION_KEY = "divODriveSession";
 
 const gisScript = document.getElementById("googleIdentityScript");
 if (gisScript) {
@@ -254,6 +257,34 @@ function updateDriveAccount(connected){
   if (button) button.hidden = connected;
 }
 
+function persistDriveSession(){
+  if(!accessToken) return;
+  sessionStorage.setItem(DRIVE_SESSION_KEY, JSON.stringify({accessToken, driveReady, driveFileId}));
+}
+
+function restoreDriveSession(){
+  try{
+    const raw = sessionStorage.getItem(DRIVE_SESSION_KEY);
+    if(!raw) return false;
+    const cached = JSON.parse(raw);
+    if(cached?.accessToken){
+      accessToken = cached.accessToken;
+      driveReady = !!cached.driveReady;
+      driveFileId = cached.driveFileId || null;
+      updateDriveAccount(!!accessToken);
+      setDriveStatus("Drive session restored from this browser tab.", true);
+      return true;
+    }
+  }catch(err){
+    console.warn("Could not restore Drive session", err);
+  }
+  return false;
+}
+
+function clearDriveSession(){
+  sessionStorage.removeItem(DRIVE_SESSION_KEY);
+}
+
 function driveConfigured(){
   return GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith("PASTE_");
 }
@@ -264,6 +295,7 @@ function gisAvailable(){
 
 function queueDriveSave(){
   if (!driveReady || !accessToken) return;
+  persistDriveSession();
   clearTimeout(driveSaveTimer);
   driveSaveTimer = setTimeout(() => { syncNow(); }, 600);
 }
@@ -299,6 +331,34 @@ function driveDiagnostics(){
   alert(lines.join('\n'));
 }
 
+async function saveLatestData(){
+  const btn=document.getElementById("saveUploadBtn");
+  if(btn) btn.disabled=true;
+  try{
+    localStorage.setItem("divOAttendance", JSON.stringify(state));
+    if(!driveReady || !accessToken){
+      if(driveConfigured()){
+        pendingDriveUpload = true;
+        setDriveStatus("connecting before upload…", false);
+        connectDrive();
+      }else{
+        setDriveStatus("Google Drive is not configured yet. Add your OAuth client ID or use the backup page to export a copy.");
+        alert("Google Drive is not configured for uploads yet. Add your OAuth client ID first or export a backup.");
+      }
+      return;
+    }
+    pendingDriveUpload = false;
+    setDriveStatus("uploading latest data…", true);
+    await syncNow();
+    setDriveStatus("latest data uploaded to Google Drive.", true);
+  }catch(err){
+    console.error("Save latest data error", err);
+    setDriveStatus("upload failed: " + err.message);
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+
 function connectDrive(){
   const btn=document.getElementById("driveBtn");
   try{
@@ -329,9 +389,14 @@ function connectDrive(){
           }
           accessToken=response.access_token;
           driveReady=true;
+          persistDriveSession();
           updateDriveAccount(true);
           setDriveStatus("connected. Loading your attendance…",true);
           await loadFromDrive();
+          if(pendingDriveUpload){
+            pendingDriveUpload=false;
+            await syncNow();
+          }
         }catch(e){
           console.error("Drive error",e);
           setDriveStatus("Drive error: "+e.message);
@@ -441,6 +506,7 @@ function cloudPayload(){
 
 async function loadFromDrive(){
   if(!accessToken) return;
+  persistDriveSession();
   try{
     const file=await findDriveFile();
     if(!file){
@@ -472,6 +538,7 @@ async function loadFromDrive(){
 }
 
 async function syncNow(){
+  persistDriveSession();
   if(!driveReady || !accessToken){
     connectDrive();
     return;
@@ -504,6 +571,7 @@ function runSelfTest(){
 
 window.connectDrive = connectDrive;
 window.syncNow = syncNow;
+window.saveLatestData = saveLatestData;
 window.exportData = exportData;
 window.importData = importData;
 window.resetAttendance = resetAttendance;
@@ -518,6 +586,13 @@ window.renderBunk = renderBunk;
 function effectiveToday(){
   const now=new Date();
   return new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+
+function initializeDriveSession(){
+  const restored = restoreDriveSession();
+  if(restored){
+    setDriveStatus("Drive session restored. Your sync state is still available.", true);
+  }
 }
 function cutoffDate(){
   const selected=document.getElementById("datePicker").value || effectiveToday();
@@ -670,6 +745,7 @@ function resetAttendance(){
     state.attendance={};localStorage.setItem("divOAttendance",JSON.stringify(state));render();
   }
 }
+initializeDriveSession();
 render();
 </script>
 </body>
