@@ -50,7 +50,7 @@ footer{color:var(--muted);font-size:11px;text-align:center;padding:8px 0 20px}
 @media(max-width:800px){.grid{grid-template-columns:repeat(2,1fr)}.session-list{grid-template-columns:1fr}.session{align-items:flex-start;flex-direction:column}.actions{width:100%}.mark{flex:1}.controls{align-items:stretch}.control{flex:1;min-width:150px}}
 @media(max-width:480px){.app{padding:12px}.grid{gap:8px}.stat{padding:12px}.stat .num{font-size:21px}.header-actions .btn{padding:8px 9px}.brand h1{font-size:21px}}
 </style>
-<script src="https://accounts.google.com/gsi/client" async onload="googleLibraryLoaded=true" onerror="googleLibraryFailed=true"></script>
+<script src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
 <div class="app">
@@ -92,7 +92,7 @@ footer{color:var(--muted);font-size:11px;text-align:center;padding:8px 0 20px}
   </div>
 </div>
 
-<div id="driveStatus" class="note" style="margin-bottom:18px">☁️ Google Drive: not connected. Attendance still works locally.</div>
+<div id="driveStatus" class="note" style="margin-bottom:18px"><b>Drive Check</b> verifies Google OAuth is loaded and shows the exact site origin to register in Google Cloud.<br>☁️ Google Drive: not connected. Attendance still works locally.</div>
 <div id="stats" class="grid"></div>
 
 <section class="card">
@@ -211,15 +211,13 @@ function setStatus(date,item,status){
    This app requests only drive.appdata, which is Google's app-specific
    hidden storage area for application data.
 ------------------------------------------------------ */
-const GOOGLE_CLIENT_ID = "629597596436-3tlunrh6ph0h0uhua7bl4mnlpk0q77jv.apps.googleusercontent.com629597596436-3tlunrh6ph0h0uhua7bl4mnlpk0q77jv.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "PASTE_YOUR_GOOGLE_OAUTH_CLIENT_ID_HERE.apps.googleusercontent.com";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
 const DRIVE_FILE_NAME = "div-o-attendance.json";
 let tokenClient = null;
 let accessToken = null;
 let driveFileId = null;
 let driveReady = false;
-let googleLibraryLoaded = false;
-let googleLibraryFailed = false;
 
 function setDriveStatus(message, ok=false){
   const el=document.getElementById("driveStatus");
@@ -233,44 +231,58 @@ function driveConfigured(){
 
 function connectDrive(){
   const btn=document.getElementById("driveBtn");
-  if(btn) btn.disabled=true;
   try{
     if(!driveConfigured()){
       setDriveStatus("not configured — add your Google OAuth Web Client ID to index.html.");
-      alert("Google Drive is not configured. Put your Google OAuth Web Client ID into GOOGLE_CLIENT_ID in index.html.");
-      return;
-    }
-    if(googleLibraryFailed){
-      setDriveStatus("Google authorization library failed to load.");
-      alert("Google's authorization library could not load. Check your internet connection or browser extensions.");
+      alert("Google Drive is not configured. Add your OAuth Web Client ID in index.html.");
       return;
     }
     if(!window.google || !google.accounts || !google.accounts.oauth2){
-      setDriveStatus("Google authorization library is still loading. Wait a moment and try again.");
-      alert("Google authorization is still loading. Wait 2–3 seconds and click Connect Google Drive again.");
+      setDriveStatus("Google Identity Services did not load. Check the browser console/network.");
+      alert("Google Identity Services did not load. Refresh the page and make sure accounts.google.com is not blocked.");
       return;
     }
+    if(btn) btn.disabled=true;
     setDriveStatus("opening Google authorization…");
     tokenClient=google.accounts.oauth2.initTokenClient({
       client_id:GOOGLE_CLIENT_ID,
       scope:DRIVE_SCOPE,
-      callback:async(response)=>{
+      callback:async function(response){
         try{
-          if(response.error){ console.error("Google OAuth error:",response); setDriveStatus("authorization failed: "+(response.error_description||response.error)); return; }
-          accessToken=response.access_token; driveReady=true; setDriveStatus("connected. Loading your attendance…",true); await loadFromDrive();
-        }catch(err){ console.error("Drive load error:",err); setDriveStatus("connected, but loading data failed: "+err.message); }
+          if(response.error){
+            console.error("Google OAuth error",response);
+            setDriveStatus("authorization failed: "+(response.error_description||response.error));
+            return;
+          }
+          accessToken=response.access_token;
+          driveReady=true;
+          setDriveStatus("connected. Loading your attendance…",true);
+          await loadFromDrive();
+        }catch(e){
+          console.error("Drive error",e);
+          setDriveStatus("Drive error: "+e.message);
+        }finally{ if(btn) btn.disabled=false; }
       },
-      error_callback:(error)=>{
-        console.error("Google OAuth popup error:",error);
-        const type=error?.type||"unknown";
-        if(type==="popup_failed_to_open"){ setDriveStatus("Google popup was blocked. Allow popups for this site and try again."); alert("Your browser blocked the Google authorization popup. Allow popups for this site, then click Connect Google Drive again."); }
-        else if(type==="popup_closed"){ setDriveStatus("authorization window was closed."); }
-        else setDriveStatus("Google authorization error: "+type);
+      error_callback:function(error){
+        console.error("Google OAuth popup error",error);
+        if(error && error.type==="popup_failed_to_open"){
+          setDriveStatus("popup blocked. Allow popups for this site and try again.");
+          alert("The Google popup was blocked. Allow popups for this site, then try again.");
+        }else if(error && error.type==="popup_closed"){
+          setDriveStatus("authorization window was closed.");
+        }else{
+          setDriveStatus("Google popup error: "+((error&&error.type)||"unknown"));
+        }
+        if(btn) btn.disabled=false;
       }
     });
     tokenClient.requestAccessToken({prompt:"consent"});
-  }catch(err){ console.error("Connect Drive error:",err); setDriveStatus("error: "+err.message); alert("Google Drive connection failed: "+err.message); }
-  finally{ if(btn) btn.disabled=false; }
+  }catch(e){
+    console.error("Connect Drive error",e);
+    setDriveStatus("connection error: "+e.message);
+    alert("Connection error: "+e.message);
+    if(btn) btn.disabled=false;
+  }
 }
 
 async function ensureDriveToken(){
@@ -372,7 +384,15 @@ async function loadFromDrive(){
       localStorage.setItem("divOAttendance",JSON.stringify(state));
       document.getElementById("batch").value=state.batch;
       document.getElementById("target").value=state.target;
-      render();
+      function driveDiagnostics(){
+  const googleOK=!!(window.google&&google.accounts&&google.accounts.oauth2);
+  const configured=driveConfigured();
+  alert("Google library: "+(googleOK?"OK":"NOT LOADED")+"\nClient ID: "+(configured?"configured":"MISSING")+"\nCurrent origin: "+location.origin+"\n\nAuthorized JavaScript origin in Google Cloud must exactly match the current origin.");
+}
+window.connectDrive=connectDrive;
+window.syncNow=syncNow;
+window.driveDiagnostics=driveDiagnostics;
+render();
       setDriveStatus("connected. Attendance restored from Drive.",true);
     }
   }catch(err){
@@ -383,7 +403,7 @@ async function loadFromDrive(){
 
 async function syncNow(){
   if(!driveReady || !accessToken){
-    setDriveStatus("not connected. Click Connect Google Drive first.");
+    connectDrive();
     return;
   }
   try{
@@ -398,13 +418,6 @@ async function syncNow(){
     console.error(err);
     setDriveStatus("save failed: " + err.message);
   }
-}
-
-function driveDiagnostics(){
-  const origin=location.origin;
-  const rows=[["Google library loaded",!!(window.google&&google.accounts&&google.accounts.oauth2)],["OAuth Client ID configured",driveConfigured()],["HTTPS or localhost",location.protocol==="https:"||location.hostname==="localhost"],["Current origin",origin]];
-  console.table(Object.fromEntries(rows));
-  alert(rows.map(([name,value])=>`${name}: ${value?"OK":"NOT OK"}`).join("\n")+`\n\nAuthorized JavaScript origin in Google Cloud must exactly match:\n${origin}`);
 }
 
 render();
