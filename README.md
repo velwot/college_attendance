@@ -2,8 +2,8 @@
 
 Upload these files to GitHub and deploy the repository to Netlify.
 
-Before deploying, replace `PASTE_YOUR_GOOGLE_OAUTH_CLIENT_ID_HERE.apps.googleusercontent.com` in `index.html` with your Google OAuth Web Client ID.
+The configured OAuth Web Client ID is `629597596436-3tlunrh6ph0h0uhua7bl4mnlpk0q77jv.apps.googleusercontent.com`.
 
-Authorized JavaScript origin in Google Cloud must exactly match the deployed site origin, e.g. `https://your-site.netlify.app`.
+In Google Cloud, add `https://velwot.netlify.app` exactly as an Authorized JavaScript origin. (The app's Drive Check button reports the exact current origin too.)
 
 The app uses Google Identity Services and requests only `https://www.googleapis.com/auth/drive.appdata`.

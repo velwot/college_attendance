@@ -50,7 +50,7 @@ footer{color:var(--muted);font-size:11px;text-align:center;padding:8px 0 20px}
 @media(max-width:800px){.grid{grid-template-columns:repeat(2,1fr)}.session-list{grid-template-columns:1fr}.session{align-items:flex-start;flex-direction:column}.actions{width:100%}.mark{flex:1}.controls{align-items:stretch}.control{flex:1;min-width:150px}}
 @media(max-width:480px){.app{padding:12px}.grid{gap:8px}.stat{padding:12px}.stat .num{font-size:21px}.header-actions .btn{padding:8px 9px}.brand h1{font-size:21px}}
 </style>
-<script src="https://accounts.google.com/gsi/client"></script>
+<script id="googleIdentityScript" src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <div class="app">
@@ -180,6 +180,7 @@ function saveSettings(){
   state.batch=document.getElementById("batch").value;
   state.target=Number(document.getElementById("target").value);
   localStorage.setItem("divOAttendance",JSON.stringify(state));
+  queueDriveSave();
 }
 
 function dateToDay(iso){
@@ -202,7 +203,10 @@ function setStatus(date,item,status){
   const id=occurrenceId(date,item);
   if(status) state.attendance[id]=status; else delete state.attendance[id];
   localStorage.setItem("divOAttendance",JSON.stringify(state));
-  
+  queueDriveSave();
+  render();
+}
+
 /* ---------------- Google Drive sync ----------------
    1. Create a Google OAuth Web application client ID.
    2. Paste it into GOOGLE_CLIENT_ID below.
@@ -218,6 +222,13 @@ let tokenClient = null;
 let accessToken = null;
 let driveFileId = null;
 let driveReady = false;
+let gisLoadError = false;
+let driveSaveTimer = null;
+
+const gisScript = document.getElementById("googleIdentityScript");
+if (gisScript) {
+  gisScript.addEventListener("error", () => { gisLoadError = true; });
+}
 
 function setDriveStatus(message, ok=false){
   const el=document.getElementById("driveStatus");
@@ -229,6 +240,47 @@ function driveConfigured(){
   return GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith("PASTE_");
 }
 
+function gisAvailable(){
+  return !!(window.google && window.google.accounts && window.google.accounts.oauth2);
+}
+
+function queueDriveSave(){
+  if (!driveReady || !accessToken) return;
+  clearTimeout(driveSaveTimer);
+  driveSaveTimer = setTimeout(() => { syncNow(); }, 600);
+}
+
+function driveDiagnostics(){
+  const origin = location.origin;
+  const protocol = location.protocol;
+  const googleLoaded = !!window.google;
+  const oauth2Available = gisAvailable();
+  const secureOrigin = protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  const configured = driveConfigured();
+  const selfTest = runSelfTest();
+  const lines = [
+    `Current origin: ${origin}`,
+    `Protocol: ${protocol}`,
+    `Google Identity Services loaded: ${googleLoaded ? 'yes' : 'no'}`,
+    `google.accounts.oauth2 available: ${oauth2Available ? 'yes' : 'no'}`,
+    `GOOGLE_CLIENT_ID configured: ${configured ? 'yes' : 'no'}`,
+    `Secure origin (HTTPS or localhost): ${secureOrigin ? 'yes' : 'no'}`,
+    `Google Identity Services script error: ${gisLoadError ? 'yes' : 'no'}`,
+    `Requested Drive scope: ${DRIVE_SCOPE}`,
+    `Self-test — marked-only percentage: ${selfTest.markedPercentage ? 'pass' : 'fail'}`,
+    `Self-test — separate Tuesday BEE IDs: ${selfTest.distinctTuesdayBee ? 'pass' : 'fail'}`,
+    `Self-test — future classes excluded: ${selfTest.futureExcluded ? 'pass' : 'fail'}`,
+    `Self-test — O1/O2/O3 filtering data present: ${selfTest.batchFiltering ? 'pass' : 'fail'}`,
+    '',
+    'Google Cloud Authorized JavaScript origins must include exactly:',
+    origin,
+    '',
+    'If this origin is not in your OAuth client, authorization will fail.'
+  ];
+  setDriveStatus('Drive diagnostics run. See alert for details.');
+  alert(lines.join('\n'));
+}
+
 function connectDrive(){
   const btn=document.getElementById("driveBtn");
   try{
@@ -237,9 +289,12 @@ function connectDrive(){
       alert("Google Drive is not configured. Add your OAuth Web Client ID in index.html.");
       return;
     }
-    if(!window.google || !google.accounts || !google.accounts.oauth2){
-      setDriveStatus("Google Identity Services did not load. Check the browser console/network.");
-      alert("Google Identity Services did not load. Refresh the page and make sure accounts.google.com is not blocked.");
+    if(!gisAvailable()){
+      const reason = gisLoadError
+        ? "Google Identity Services could not be downloaded. Check your network, content blockers, and accounts.google.com access."
+        : "Google Identity Services is still loading. Wait a moment, then try again.";
+      setDriveStatus(reason);
+      alert(reason);
       return;
     }
     if(btn) btn.disabled=true;
@@ -376,23 +431,17 @@ async function loadFromDrive(){
     driveFileId=file.id;
     const remote=await loadDriveFile(driveFileId);
     if(remote && remote.attendance){
-      state.attendance=remote.attendance;
+      const remoteAttendance = remote.attendance || {};
+      const localAttendance = state.attendance || {};
+      state.attendance = {...remoteAttendance, ...localAttendance};
       if(remote.settings){
-        state.batch=remote.settings.batch || state.batch;
-        state.target=remote.settings.target || state.target;
+        state.batch = state.batch || remote.settings.batch;
+        state.target = state.target || remote.settings.target;
       }
       localStorage.setItem("divOAttendance",JSON.stringify(state));
       document.getElementById("batch").value=state.batch;
       document.getElementById("target").value=state.target;
-      function driveDiagnostics(){
-  const googleOK=!!(window.google&&google.accounts&&google.accounts.oauth2);
-  const configured=driveConfigured();
-  alert("Google library: "+(googleOK?"OK":"NOT LOADED")+"\nClient ID: "+(configured?"configured":"MISSING")+"\nCurrent origin: "+location.origin+"\n\nAuthorized JavaScript origin in Google Cloud must exactly match the current origin.");
-}
-window.connectDrive=connectDrive;
-window.syncNow=syncNow;
-window.driveDiagnostics=driveDiagnostics;
-render();
+      render();
       setDriveStatus("connected. Attendance restored from Drive.",true);
     }
   }catch(err){
@@ -420,8 +469,28 @@ async function syncNow(){
   }
 }
 
-render();
+function runSelfTest(){
+  const tueBee = timetable.filter(item => item.day === "Tuesday" && item.subject === "BEE" && item.start >= "13:00" && item.end <= "15:00");
+  const distinctBeeIds = tueBee.length === 2 && occurrenceId("2026-07-28", tueBee[0]) !== occurrenceId("2026-07-28", tueBee[1]);
+  const markedPercentage = (1 / (1 + 1)) * 100 === 50;
+  const futureExcluded = termDates().every(date => date <= effectiveToday());
+  const batchFiltering = timetable.some(item => item.batch === "O1") &&
+    timetable.some(item => item.batch === "O2") && timetable.some(item => item.batch === "O3");
+  const results = { markedPercentage, distinctTuesdayBee: distinctBeeIds, futureExcluded, batchFiltering };
+  console.table(results);
+  return results;
 }
+
+window.connectDrive = connectDrive;
+window.syncNow = syncNow;
+window.exportData = exportData;
+window.importData = importData;
+window.resetAttendance = resetAttendance;
+window.saveSettings = saveSettings;
+window.render = render;
+window.driveDiagnostics = driveDiagnostics;
+window.setStatus = setStatus;
+window.runSelfTest = runSelfTest;
 
 function effectiveToday(){
   const now=new Date();
