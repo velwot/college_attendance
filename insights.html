@@ -13,7 +13,8 @@
   <nav class="nav" aria-label="Application pages"><a href="index.html">Dashboard</a><a href="insights.html" aria-current="page">Insights</a><a href="save.html">Save &amp; Backup</a></nav>
   <section id="metrics" class="metrics"></section>
   <section class="card"><h2>Subject performance</h2><p class="sub">Present ÷ (Present + Absent)</p><div id="subjects"></div></section>
-  <section class="card"><h2>Last 7 days of marked activity</h2><p class="sub">This is a record of marks made, not scheduled classes.</p><div id="activity" class="activity"></div></section>
+  <section class="card"><h2>Monthly marked activity</h2><p class="sub">This is a record of marks made, not scheduled classes.</p><div id="activity" class="activity"></div></section>
+  <section class="card"><h2>Monthly breakdown by subject</h2><p class="sub">Counts of marked classes per subject, grouped by month.</p><div id="monthlyBreakdown"></div></section>
   <div style="display:flex;justify-content:flex-end;margin-top:6px">
     <button id="installBtn" class="btn" style="display:none">Install App</button>
   </div>
@@ -26,6 +27,43 @@
   const bySubject={}; entries.forEach(x=>{const s=bySubject[x.subject] ||= {present:0,total:0};s.total++;if(x.status==="present")s.present++;});
   const target=Number(state.target) || 75;
   const rows=Object.entries(bySubject).sort(([a],[b])=>a.localeCompare(b)); document.getElementById("subjects").innerHTML=rows.length ? rows.map(([name,x])=>{const pct=x.present/x.total*100;const bunk=Math.max(0,Math.floor((x.present*100/target)-x.total+1e-9));const need=Math.max(0,Math.ceil((target*x.total-100*x.present)/(100-target)));const forecast=pct>=target ? `Can miss ${bunk} more at ${target}% target` : `Attend ${need} in a row to reach ${target}%`;return `<div class="subject"><span class="name">${name}</span><div><div class="bar"><i style="width:${pct}%"></i></div><span class="sub">${x.present} present of ${x.total} marked · ${forecast}</span></div><span class="value">${pct.toFixed(1)}%</span></div>`}).join("") : '<div class="empty">No marked attendance yet. Mark a class on the Dashboard to begin seeing insights.</div>';
-  const dates=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));return d.toISOString().slice(0,10)});document.getElementById("activity").innerHTML=dates.map(date=>{const count=entries.filter(x=>x.date===date).length;return `<div class="day ${count?"active":""}">${new Date(date+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short"})}<b>${count || "—"}</b></div>`}).join("");
+  // Aggregate marked activity by month (YYYY-MM)
+  const monthsMap = {};
+  entries.forEach(x => {
+    if (!x.date) return;
+    const key = x.date.slice(0,7); // e.g. "2026-08"
+    monthsMap[key] = (monthsMap[key] || 0) + 1;
+  });
+  const months = Object.keys(monthsMap).sort();
+  const activityEl = document.getElementById("activity");
+  if (!months.length) {
+    activityEl.innerHTML = '<div class="empty">No marked attendance yet. Mark a class on the Dashboard to begin seeing monthly activity.</div>';
+  } else {
+    activityEl.innerHTML = months.map(m => {
+      const count = monthsMap[m];
+      const date = new Date(m + "-01T12:00:00");
+      const label = date.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+      return `<div class="day ${count?"active":""}">${label}<b>${count}</b></div>`;
+    }).join("");
+  }
+
+  // Build monthly breakdown table by subject
+  const monthlyEl = document.getElementById('monthlyBreakdown');
+  if (!months.length) {
+    monthlyEl.innerHTML = '<div class="empty">No marked attendance yet. Mark a class on the Dashboard to begin seeing monthly activity.</div>';
+  } else {
+    const subjectsList = Array.from(new Set(entries.map(e=>e.subject))).sort();
+    const headerCells = months.map(m=>{const d=new Date(m+"-01T12:00:00");return `<th style="padding:8px;text-align:right">${d.toLocaleDateString('en-GB',{month:'short'})}</th>`}).join('');
+    let table = `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:8px">Subject</th>${headerCells}<th style="padding:8px;text-align:right">Total</th></tr></thead><tbody>`;
+    subjectsList.forEach(s=>{
+      const counts = months.map(m=>entries.filter(e=>e.subject===s && e.date.startsWith(m)).length);
+      const total = counts.reduce((a,b)=>a+b,0);
+      table += `<tr><td style="padding:8px"><b>${s}</b></td>` + counts.map(c=>`<td style="padding:8px;text-align:right">${c||'—'}</td>`).join('') + `<td style="padding:8px;text-align:right"><b>${total}</b></td></tr>`;
+    });
+    table += `</tbody></table></div>`;
+    monthlyEl.innerHTML = table;
+  }
+</script>
 <script src="/pwa.js" defer></script>
-</script></body></html>
+</body></html>
+

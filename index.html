@@ -177,6 +177,9 @@ function saveSettings(){
   state.batch=document.getElementById("batch").value;
   state.target=Number(document.getElementById("target").value);
   localStorage.setItem("divOAttendance",JSON.stringify(state));
+  // record local modification timestamp and notify other tabs
+  setLastLocalModifiedAt();
+  broadcastStateUpdated();
   queueDriveSave();
 }
 
@@ -200,6 +203,8 @@ function setStatus(date,item,status){
   const id=occurrenceId(date,item);
   if(status) state.attendance[id]=status; else delete state.attendance[id];
   localStorage.setItem("divOAttendance",JSON.stringify(state));
+  setLastLocalModifiedAt();
+  broadcastStateUpdated();
   queueDriveSave();
   render();
 }
@@ -217,6 +222,8 @@ function toggleHoliday(){
     state.holidays[date]=true;
   }else{return;}
   localStorage.setItem("divOAttendance",JSON.stringify(state));
+  setLastLocalModifiedAt();
+  broadcastStateUpdated();
   queueDriveSave();
   render();
 }
@@ -239,6 +246,36 @@ let driveReady = false;
 let gisLoadError = false;
 let driveSaveTimer = null;
 let pendingDriveUpload = false;
+// Sync control
+let isSyncing = false; // in-memory mutex to prevent concurrent syncNow()
+let pendingSyncRequest = false; // coalesce additional sync requests while syncing
+const LAST_LOCAL_KEY = 'divOAttendance_lastLocalModifiedAt';
+const LAST_REMOTE_KEY = 'divOAttendance_lastRemoteUpdatedAt';
+
+// Cross-tab coordination: BroadcastChannel fallback to storage events
+let bc = null;
+try { if ('BroadcastChannel' in window) bc = new BroadcastChannel('divo-attendance'); } catch(e) { bc = null; }
+if (bc) {
+  bc.addEventListener('message', (m) => {
+    const msg = m.data || {};
+    if (msg.type === 'state-updated') {
+      // Another tab changed localStorage; reload and render
+      try { state = JSON.parse(localStorage.getItem('divOAttendance') || JSON.stringify(state)); } catch(e){}
+      render();
+    } else if (msg.type === 'sync-start') {
+      // optional: indicate syncing
+    } else if (msg.type === 'sync-end') {
+      // optional: indicate sync complete
+    }
+  });
+} else {
+  window.addEventListener('storage', (ev) => {
+    if ((ev.key === 'divOAttendance' || ev.key === 'divOAttendance_broadcast') && ev.newValue) {
+      try { state = JSON.parse(localStorage.getItem('divOAttendance') || JSON.stringify(state)); } catch(e) {}
+      render();
+    }
+  });
+}
 const DRIVE_SESSION_KEY = "divODriveSession";
 
 const gisScript = document.getElementById("googleIdentityScript");
@@ -262,6 +299,29 @@ function updateDriveAccount(connected){
 function persistDriveSession(){
   if(!accessToken) return;
   sessionStorage.setItem(DRIVE_SESSION_KEY, JSON.stringify({accessToken, driveReady, driveFileId}));
+}
+
+// Timestamp helpers
+function getLastLocalModifiedAt(){
+  return localStorage.getItem(LAST_LOCAL_KEY) || null;
+}
+function setLastLocalModifiedAt(iso){
+  const v = iso || new Date().toISOString();
+  localStorage.setItem(LAST_LOCAL_KEY, v);
+}
+function getLastRemoteUpdatedAt(){
+  return localStorage.getItem(LAST_REMOTE_KEY) || null;
+}
+function setLastRemoteUpdatedAt(iso){
+  const v = iso || new Date().toISOString();
+  localStorage.setItem(LAST_REMOTE_KEY, v);
+}
+
+function broadcastStateUpdated(){
+  try{
+    if(bc) bc.postMessage({type:'state-updated'});
+    else localStorage.setItem('divOAttendance_broadcast', Date.now().toString());
+  }catch(e){}
 }
 
 function restoreDriveSession(){
@@ -513,25 +573,65 @@ async function loadFromDrive(){
     const file=await findDriveFile();
     if(!file){
       driveFileId=await createDriveFile(cloudPayload());
+      setLastRemoteUpdatedAt(cloudPayload().updatedAt);
       setDriveStatus("connected. New attendance backup created.",true);
       return;
     }
     driveFileId=file.id;
-    const remote=await loadDriveFile(driveFileId);
+    const metadata = file; // has modifiedTime
+    const remote = await loadDriveFile(driveFileId);
     if(remote && remote.attendance){
       const remoteAttendance = remote.attendance || {};
-      const localAttendance = state.attendance || {};
-      state.attendance = {...remoteAttendance, ...localAttendance};
-      state.holidays = {...(remote.holidays || {}), ...(state.holidays || {})};
-      if(remote.settings){
-        state.batch = state.batch || remote.settings.batch;
-        state.target = state.target || remote.settings.target;
+      const remoteUpdatedAt = remote.updatedAt || metadata.modifiedTime || new Date().toISOString();
+      const lastLocal = getLastLocalModifiedAt();
+      const lastRemoteKnown = getLastRemoteUpdatedAt();
+
+      // If local appears cleared and remote has data and remote is newer, restore remote
+      if((!state.attendance || Object.keys(state.attendance).length===0) && Object.keys(remoteAttendance).length>0 && (!lastLocal || lastLocal < remoteUpdatedAt)){
+        state.attendance = remoteAttendance;
+        state.holidays = {...(remote.holidays || {})};
+        if(remote.settings){ state.batch = state.batch || remote.settings.batch; state.target = state.target || remote.settings.target; }
+        localStorage.setItem("divOAttendance",JSON.stringify(state));
+        setLastRemoteUpdatedAt(remoteUpdatedAt);
+        document.getElementById("batch").value=state.batch;
+        document.getElementById("target").value=state.target;
+        broadcastStateUpdated();
+        render();
+        setDriveStatus("connected. Attendance restored from Drive.",true);
+        return;
       }
+
+      // conservative merge: if remote is newer than last known remote and local hasn't changed since then, prefer remote for conflicts
+      const merged = {};
+      const keys = new Set([...Object.keys(remoteAttendance), ...Object.keys(state.attendance || {})]);
+      keys.forEach(k=>{
+        const rVal = remoteAttendance[k];
+        const lVal = (state.attendance||{})[k];
+        if(rVal !== undefined && lVal !== undefined){
+          if(lastLocal && lastLocal < remoteUpdatedAt){
+            // local didn't change since remote update -> trust remote
+            merged[k] = rVal;
+          } else {
+            // prefer local
+            merged[k] = lVal;
+          }
+        } else if(rVal !== undefined){
+          merged[k] = rVal;
+        } else {
+          merged[k] = lVal;
+        }
+      });
+
+      state.attendance = merged;
+      state.holidays = {...(remote.holidays || {}), ...(state.holidays || {})};
+      if(remote.settings){ state.batch = state.batch || remote.settings.batch; state.target = state.target || remote.settings.target; }
       localStorage.setItem("divOAttendance",JSON.stringify(state));
+      setLastRemoteUpdatedAt(remoteUpdatedAt);
       document.getElementById("batch").value=state.batch;
       document.getElementById("target").value=state.target;
+      broadcastStateUpdated();
       render();
-      setDriveStatus("connected. Attendance restored from Drive.",true);
+      setDriveStatus("connected. Attendance merged from Drive.",true);
     }
   }catch(err){
     console.error(err);
@@ -540,22 +640,100 @@ async function loadFromDrive(){
 }
 
 async function syncNow(){
+  // serialize syncs in this tab
+  if(isSyncing){ pendingSyncRequest = true; return; }
+  isSyncing = true;
+  if(bc) try{ bc.postMessage({type:'sync-start'}); }catch(e){}
   persistDriveSession();
   if(!driveReady || !accessToken){
+    isSyncing = false;
     connectDrive();
+    if(bc) try{ bc.postMessage({type:'sync-end'}); }catch(e){}
     return;
   }
   try{
+    // ensure we have driveFileId
     if(!driveFileId){
-      const file=await findDriveFile();
-      driveFileId=file?.id || null;
+      const f = await findDriveFile();
+      driveFileId = f?.id || null;
     }
-    if(driveFileId) await updateDriveFile(driveFileId,cloudPayload());
-    else driveFileId=await createDriveFile(cloudPayload());
-    setDriveStatus("saved just now.",true);
+
+    const localAttendance = state.attendance || {};
+    // If no remote file, create one with current state (but protect empty->remote overwrite)
+    if(!driveFileId){
+      // If local empty and we don't want to create an empty remote when an older remote might exist, just create normally
+      const payload = cloudPayload();
+      driveFileId = await createDriveFile(payload);
+      setLastRemoteUpdatedAt(payload.updatedAt);
+      setDriveStatus('saved just now.', true);
+      return;
+    }
+
+    // Read current remote metadata and content
+    const meta = await findDriveFile();
+    const remoteContent = await loadDriveFile(driveFileId);
+    const remoteAttendance = (remoteContent && remoteContent.attendance) ? remoteContent.attendance : {};
+    const remoteUpdatedAt = (remoteContent && remoteContent.updatedAt) || meta?.modifiedTime || new Date().toISOString();
+    const lastRemoteKnown = getLastRemoteUpdatedAt();
+    const lastLocal = getLastLocalModifiedAt();
+
+    // If local is empty but remote has data and remote is newer: restore instead of overwrite
+    if((!localAttendance || Object.keys(localAttendance).length===0) && Object.keys(remoteAttendance).length>0 && (!lastLocal || lastLocal < remoteUpdatedAt)){
+      // restore remote to local rather than uploading empty
+      state.attendance = remoteAttendance;
+      state.holidays = {...(remoteContent.holidays || {})};
+      if(remoteContent.settings){ state.batch = state.batch || remoteContent.settings.batch; state.target = state.target || remoteContent.settings.target; }
+      localStorage.setItem('divOAttendance', JSON.stringify(state));
+      setLastRemoteUpdatedAt(remoteUpdatedAt);
+      broadcastStateUpdated();
+      render();
+      setDriveStatus('Restored newer backup from Drive instead of uploading empty local state.', true);
+      return;
+    }
+
+    // If remote changed since last known, perform conservative merge
+    let mergedAttendance = {};
+    if(lastRemoteKnown && lastRemoteKnown < remoteUpdatedAt){
+      const keys = new Set([...Object.keys(remoteAttendance), ...Object.keys(localAttendance)]);
+      keys.forEach(k=>{
+        const r = remoteAttendance[k];
+        const l = localAttendance[k];
+        if(r !== undefined && l !== undefined){
+          if(lastLocal && lastLocal < remoteUpdatedAt){
+            mergedAttendance[k] = r; // remote newer
+          } else {
+            mergedAttendance[k] = l; // local newer or same
+          }
+        } else if(r !== undefined){
+          mergedAttendance[k] = r;
+        } else {
+          mergedAttendance[k] = l;
+        }
+      });
+    } else {
+      // remote not newer than known; local is authoritative
+      mergedAttendance = localAttendance;
+    }
+
+    // Prepare payload and upload
+    const payload = cloudPayload();
+    payload.attendance = mergedAttendance;
+    payload.updatedAt = new Date().toISOString();
+
+    await updateDriveFile(driveFileId, payload);
+    setLastRemoteUpdatedAt(payload.updatedAt);
+    // persist merged state locally
+    state.attendance = mergedAttendance;
+    localStorage.setItem('divOAttendance', JSON.stringify(state));
+    broadcastStateUpdated();
+    setDriveStatus('saved just now.', true);
   }catch(err){
     console.error(err);
-    setDriveStatus("save failed: " + err.message);
+    setDriveStatus('save failed: ' + err.message);
+  }finally{
+    isSyncing = false;
+    if(bc) try{ bc.postMessage({type:'sync-end'}); }catch(e){}
+    if(pendingSyncRequest){ pendingSyncRequest = false; syncNow(); }
   }
 }
 
@@ -736,15 +914,31 @@ function importData(e){
     try{
       const p=JSON.parse(r.result);
       if(!p.attendance) throw new Error("Invalid backup");
-      state.attendance=p.attendance; state.holidays=p.holidays || {}; if(p.settings){state.batch=p.settings.batch||state.batch;state.target=p.settings.target||state.target}
+      state.attendance=p.attendance; state.holidays=p.holidays || {};
+      if(p.settings){state.batch=p.settings.batch||state.batch;state.target=p.settings.target||state.target}
       localStorage.setItem("divOAttendance",JSON.stringify(state));
-      document.getElementById("batch").value=state.batch;document.getElementById("target").value=state.target;render();alert("Attendance backup imported.");
+      setLastLocalModifiedAt();
+      broadcastStateUpdated();
+      document.getElementById("batch").value=state.batch;document.getElementById("target").value=state.target;render();
+      // After an explicit import, sync to Drive
+      queueDriveSave();
+      alert("Attendance backup imported.");
     }catch(err){alert("Could not import this file.");}
   };r.readAsText(file);e.target.value="";
 }
 function resetAttendance(){
   if(confirm("Delete all recorded attendance from this browser? This cannot be undone unless you have an export backup.")){
-    state.attendance={};localStorage.setItem("divOAttendance",JSON.stringify(state));render();
+    state.attendance={};
+    localStorage.setItem("divOAttendance",JSON.stringify(state));
+    setLastLocalModifiedAt();
+    broadcastStateUpdated();
+    // Do not automatically overwrite Drive backup with an empty dataset without extra confirmation
+    if(confirm("Also clear the Drive backup? This will remove attendance stored in your Google Drive app-data.")){
+      queueDriveSave();
+    } else {
+      setDriveStatus('Local attendance cleared. Drive backup preserved.');
+    }
+    render();
   }
 }
 initializeDriveSession();
