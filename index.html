@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111827">
 <title>DIV-O Attendance · Google Drive</title>
+<link rel="manifest" href="/manifest.json">
 <style>
 /* Design tokens */
 :root { --bg:#f5f7fb; --surface:#fff; --text:#172033; --muted:#68738a; --line:#e3e8f1; --primary:#2563eb; --primary-dark:#1d4ed8; --green:#087443; --green-bg:#e7f8ef; --red:#b4233c; --red-bg:#fff0f2; --amber:#a65a00; --amber-bg:#fff6dd; --shadow:0 10px 28px rgba(28,42,70,.08); --radius:18px; }
@@ -36,13 +37,14 @@ header { display:flex; gap:22px; justify-content:space-between; align-items:cent
 <div class="app">
 <header>
   <div class="brand" style="display:flex;align-items:center;gap:12px">
-    <img id="vgecLogo" src="logo.png" alt="VGEC logo" onerror="this.style.display='none'" style="width:48px;height:48px;border-radius:8px;background:#fff;padding:4px">
+    <img id="vgecLogo" src="/assets/icon-192.svg" alt="VGEC logo" style="width:48px;height:48px;border-radius:8px;background:#fff;padding:4px">
     <div>
       <h1>VGEC (ICT) · DIV-O Attendance</h1>
       <p>Sem 1 · ICT Engineering · ODD 2026</p>
     </div>
   </div>
   <div class="header-actions">
+    <button class="btn" id="installBtn" style="display:none">Install App</button>
     <button class="btn" id="saveUploadBtn" onclick="saveLatestData()">Save / Upload</button>
     <button class="btn primary" id="driveBtn" onclick="connectDrive()">Connect Google Drive</button>
     <div id="driveAccount" class="drive-account" title="Google Drive connected — account details are not requested">
@@ -748,5 +750,6 @@ function resetAttendance(){
 initializeDriveSession();
 render();
 </script>
+<script src="/pwa.js" defer></script>
 </body>
 </html>

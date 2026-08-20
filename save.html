@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#111827">
   <title>Save & Backup · DIV-O Attendance</title>
+  <link rel="manifest" href="/manifest.json">
   <script id="googleIdentityScript" src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root{--bg:#f5f7fb;--card:#fff;--text:#172033;--muted:#68738a;--line:#e3e8f1;--blue:#2563eb;--red:#b4233c;--green:#087443;--shadow:0 10px 28px rgba(28,42,70,.08)}*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#f7f9fd,#eef4ff);color:var(--text);font:15px/1.45 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}.app{max-width:800px;margin:auto;padding:28px 18px 42px}header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:10px}h1{font-size:1.55rem;letter-spacing:-.035em;margin:0}p{color:var(--muted)}.nav{display:flex;gap:7px;overflow:auto;margin:0 0 22px}.nav a{color:#506079;text-decoration:none;white-space:nowrap;padding:7px 10px;border-radius:8px;font-size:.8rem;font-weight:750}.nav a:hover,.nav a[aria-current=page]{color:var(--blue);background:#eaf1ff}.drive-link{display:inline-flex;align-items:center;gap:7px;color:#fff;background:var(--blue);text-decoration:none;border-radius:11px;padding:10px 13px;font-size:.82rem;font-weight:750;white-space:nowrap}.card{background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:17px;padding:19px;margin:0 0 16px}.card h2{font-size:1.02rem;margin:0 0 5px}.card p{font-size:.86rem;margin:0 0 15px}.actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.action{min-height:118px;text-align:left;border:1px solid var(--line);border-radius:13px;background:#fff;padding:14px;color:var(--text);font:inherit;cursor:pointer}.action:hover{border-color:#adc6f6;background:#f8fbff}.action strong{display:block;font-size:.9rem;margin:6px 0 3px}.action span{font-size:.76rem;color:var(--muted)}.danger{color:var(--red)}.notice{border-left:4px solid var(--blue);background:#f4f8ff;padding:12px 13px;border-radius:8px;font-size:.8rem;color:#40506a}.status{font-size:.82rem;color:var(--green);min-height:20px}@media(max-width:500px){.app{padding:20px 14px 30px}header{align-items:flex-start;flex-direction:column}.actions{grid-template-columns:1fr}.drive-link{width:100%;justify-content:center}}
@@ -14,7 +15,10 @@
   <main class="app">
     <header>
       <div><h1>Save &amp; Backup</h1><p>Keep a portable copy of your attendance.</p></div>
-      <a class="drive-link" href="index.html">☁ Connect Google Drive</a>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn" id="installBtn" style="display:none">Install App</button>
+        <a class="drive-link" href="index.html">☁ Connect Google Drive</a>
+      </div>
     </header>
     <nav class="nav" aria-label="Application pages"><a href="index.html">Dashboard</a><a href="insights.html">Insights</a><a href="save.html" aria-current="page">Save &amp; Backup</a></nav>
 
@@ -68,5 +72,6 @@
       document.getElementById("driveCheck").textContent=`Origin: ${location.origin} · HTTPS/localhost: ${secure ? "yes" : "no"} · Google Identity Services: ${oauth ? "ready" : "still loading"} · Client ID: configured. Register this exact origin in Google Cloud.`;
     });
   </script>
+  <script src="/pwa.js" defer></script>
 </body>
 </html>
