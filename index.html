@@ -117,6 +117,51 @@ header { display:flex; gap:22px; justify-content:space-between; align-items:cent
   </div>
 </section>
 
+<section class="card" id="reviewBunkCard">
+  <h2>Semester Review Attendance &amp; Bunk Planner</h2>
+  <div class="sub">Calculate how many lectures you must attend or can skip for each subject until your college review or semester end date.</div>
+  <div class="controls" style="margin-bottom:14px">
+    <div class="control">
+      <label>Review / Cutoff Date</label>
+      <input id="reviewDate" type="date" min="2026-07-26" max="2026-12-11" value="2026-12-11" onchange="renderReviewBunk()">
+    </div>
+    <div class="control">
+      <label>Target Criteria</label>
+      <select id="reviewTarget" onchange="renderReviewBunk()">
+        <option value="75">75% Target</option>
+        <option value="80">80% Target</option>
+        <option value="85">85% Target</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>Quick Presets</label>
+      <div style="display:flex;gap:6px;align-items:center;height:43px">
+        <button type="button" class="btn" style="flex:1;min-height:41px;padding:4px 6px;font-size:.76rem" onclick="setReviewPreset(75)">75%</button>
+        <button type="button" class="btn" style="flex:1;min-height:41px;padding:4px 6px;font-size:.76rem" onclick="setReviewPreset(80)">80%</button>
+        <button type="button" class="btn" style="flex:1;min-height:41px;padding:4px 6px;font-size:.76rem" onclick="setReviewPreset(85)">85%</button>
+      </div>
+    </div>
+  </div>
+  <div id="reviewBunkSummary" style="margin-bottom:12px"></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Subject</th>
+          <th>Recorded</th>
+          <th>Remaining</th>
+          <th>Total Classes</th>
+          <th>Must Attend</th>
+          <th>Can Skip (Bunk)</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="reviewBunkBody"></tbody>
+    </table>
+  </div>
+  <div class="note" id="reviewBunkNote" style="margin-top:12px"></div>
+</section>
+
 <footer>LocalStorage is the offline cache. When Google Drive is connected, attendance is also backed up to your Google Drive app-data storage.<br><span style="display:block;margin-top:6px;font-weight:700;color:var(--text)">Created by Narayan</span></footer>
 </div>
 
@@ -762,6 +807,8 @@ window.setStatus = setStatus;
 window.toggleHoliday = toggleHoliday;
 window.runSelfTest = runSelfTest;
 window.renderBunk = renderBunk;
+window.renderReviewBunk = renderReviewBunk;
+window.setReviewPreset = setReviewPreset;
 
 function effectiveToday(){
   const now=new Date();
@@ -874,6 +921,7 @@ function renderHistory(){
   document.getElementById("historyBody").innerHTML=rows.length?rows.map(x=>`<tr><td>${new Date(x.date+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</td><td>${x.item.time}</td><td><b>${x.item.subject}</b></td><td>${x.item.batch||"—"}</td><td><span class="badge ${x.status==="present"?"safe":"low"}">${x.status}</span></td></tr>`).join(""):`<tr><td colspan="5" style="text-align:center;color:var(--muted)">No attendance marked yet.</td></tr>`;
 }
 function render(){saveSettings();renderStats();renderToday();renderSubjects();renderWeek();renderHistory();renderBunk();}
+function render(){saveSettings();renderStats();renderToday();renderSubjects();renderWeek();renderHistory();renderBunk();renderReviewBunk();}
 function availableBunksFor(present, marked, target){
   if(!marked) return null;
   const t = Number(target)/100;
@@ -901,6 +949,127 @@ function renderBunk(){
     const s = stats[chosen]||{present:0,marked:0,unmarked:0};
     const avail = availableBunksFor(s.present,s.marked,target);
     body.innerHTML = `<div style="font-size:15px"><b>${chosen} available bunks:</b> ${s.marked?avail:'—'}</div><div class="note" style="margin-top:8px">Recorded: ${s.marked} · Present: ${s.present} · Unmarked past: ${s.unmarked}</div>`;
+  }
+}
+
+function setReviewPreset(pct){
+  const sel = document.getElementById('reviewTarget');
+  if(sel){ sel.value = String(pct); renderReviewBunk(); }
+}
+
+function futureOccurrences(targetDate){
+  const out = [];
+  const start = new Date(effectiveToday() + "T12:00:00");
+  const end = new Date(targetDate + "T12:00:00");
+  if(end <= start) return out;
+  let d = new Date(start);
+  d.setDate(d.getDate() + 1);
+  while(d <= end){
+    const iso = d.toISOString().slice(0, 10);
+    if(!isHoliday(iso)){
+      const day = dateToDay(iso);
+      for(const item of classItems(day)){
+        out.push({ date: iso, item });
+      }
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function renderReviewBunk(){
+  const dateInput = document.getElementById('reviewDate');
+  const targetSelect = document.getElementById('reviewTarget');
+  const body = document.getElementById('reviewBunkBody');
+  const summary = document.getElementById('reviewBunkSummary');
+  const note = document.getElementById('reviewBunkNote');
+  if(!dateInput || !targetSelect || !body) return;
+
+  if(!targetSelect.dataset.initialized){
+    targetSelect.value = state.target ? String(state.target) : '75';
+    targetSelect.dataset.initialized = '1';
+  }
+
+  const reviewDate = dateInput.value || TERM_END;
+  const targetPct = Number(targetSelect.value) || 75;
+  const targetFrac = targetPct / 100;
+
+  const pastStats = subjectStats();
+  const futureList = futureOccurrences(reviewDate);
+  const futureCounts = {};
+  subjects.forEach(s => { futureCounts[s] = 0; });
+  futureList.forEach(o => {
+    const s = o.item.subject;
+    if(futureCounts[s] !== undefined) futureCounts[s]++;
+    else futureCounts[s] = 1;
+  });
+
+  let totalPastMarked = 0, totalPastPresent = 0, totalFuture = 0;
+  subjects.forEach(s => {
+    const p = pastStats[s] || { marked: 0, present: 0 };
+    totalPastMarked += p.marked;
+    totalPastPresent += p.present;
+    totalFuture += (futureCounts[s] || 0);
+  });
+
+  const grandTotal = totalPastMarked + totalFuture;
+  const overallReqPresent = Math.ceil(targetFrac * grandTotal);
+  const overallMustAttend = Math.max(0, overallReqPresent - totalPastPresent);
+  const overallCanSkip = grandTotal > 0 ? (totalFuture >= overallMustAttend ? (totalFuture - overallMustAttend) : 0) : 0;
+  const overallPossible = overallMustAttend <= totalFuture;
+
+  const summaryHtml = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:12px;background:#f0f5ff;border:1px solid #d0e1fd;border-radius:12px">
+      <div><b>Target:</b> <span class="badge safe" style="font-size:.8rem">${targetPct}%</span></div>
+      <div><b>Review Date:</b> ${new Date(reviewDate + "T12:00:00").toLocaleDateString("en-GB", {day:"numeric", month:"short", year:"numeric"})}</div>
+      <div><b>Remaining Classes:</b> <b>${totalFuture}</b></div>
+      <div><b>Overall Can Skip:</b> <span class="badge ${overallCanSkip > 0 ? 'safe' : 'warn'}" style="font-size:.8rem">${overallPossible ? (overallCanSkip + ' classes') : '0 (Target unreachable)'}</span></div>
+      <div><b>Overall Must Attend:</b> <span class="badge ${overallMustAttend === 0 ? 'safe' : (overallPossible ? 'warn' : 'low')}" style="font-size:.8rem">${overallMustAttend} of ${totalFuture}</span></div>
+    </div>
+  `;
+  if(summary) summary.innerHTML = summaryHtml;
+
+  const rows = subjects.map(s => {
+    const p = pastStats[s] || { marked: 0, present: 0 };
+    const rem = futureCounts[s] || 0;
+    const total = p.marked + rem;
+    const reqPresent = Math.ceil(targetFrac * total);
+    const mustAttend = Math.max(0, reqPresent - p.present);
+    const possible = mustAttend <= rem;
+    const canSkip = possible ? (rem - mustAttend) : 0;
+
+    let statusBadgeHtml = '';
+    if(total === 0){
+      statusBadgeHtml = '<span class="badge">No classes</span>';
+    } else if(!possible){
+      statusBadgeHtml = '<span class="badge low">Target unreachable</span>';
+    } else if(canSkip > 0){
+      statusBadgeHtml = `<span class="badge safe">Can bunk ${canSkip}</span>`;
+    } else if(mustAttend > 0){
+      statusBadgeHtml = `<span class="badge warn">Attend all ${mustAttend}</span>`;
+    } else {
+      statusBadgeHtml = '<span class="badge safe">Target already met</span>';
+    }
+
+    const recordedText = p.marked > 0 ? `${p.present}/${p.marked} (${(p.present/p.marked*100).toFixed(1)}%)` : '0/0 (—)';
+
+    return `
+      <tr>
+        <td><b>${s}</b></td>
+        <td>${recordedText}</td>
+        <td>${rem}</td>
+        <td>${total}</td>
+        <td><b>${mustAttend}</b></td>
+        <td><b style="color:${canSkip > 0 ? 'var(--green)' : 'inherit'}">${possible ? canSkip : '0'}</b></td>
+        <td>${statusBadgeHtml}</td>
+      </tr>
+    `;
+  });
+
+  body.innerHTML = rows.join('');
+
+  if(note){
+    note.innerHTML = `💡 <b>How this works:</b> Counts all scheduled lectures & labs for your batch between tomorrow and <b>${reviewDate}</b> (excluding any marked holidays). Total classes = already recorded + remaining upcoming. To achieve <b>${targetPct}%</b> attendance, it calculates the minimum future classes you must attend and the maximum lectures you can safely skip.`;
   }
 }
 function exportData(){
